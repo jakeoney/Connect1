@@ -6,10 +6,17 @@
  * @author Mike Dillenbeck
  */
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.*;
 
+/*
+ * The purpose of Iperfer is to test the connection speed between to machines 
+ * (a client and a server). Once a server connection is established, a client
+ * will connect to it, and send it a constant stream of packets (thousand byte 
+ * packets). It will send these packets for a specified amount of time that is
+ * less than 10 minutes. Once the client is done sending and the server is
+ * done receiving, both will print out the total number of packets sent/received
+ * and the speed at which they sent/received those packets.
+ */
 public class Iperfer 
 {
 	public static void main(String[] args) 
@@ -42,15 +49,18 @@ public class Iperfer
 			{
 				arg = args[i++];
 
+				//specifies client
 				if(arg.equals("-c"))
 					clientMode = true;
-
+				
+				//specifies host name
 				else if(arg.equals("-h"))
 				{
 					hostNameFound = true;
 					hostname = args[i++];
 				}
 
+				//specifies port number
 				else if(arg.equals("-p"))
 				{
 					portFound = true;
@@ -70,9 +80,11 @@ public class Iperfer
 					}
 				}
 
+				//specifies server
 				else if(arg.equals("-s"))
 					serverMode = true;
 
+				//specifies time to send
 				else if(arg.equals("-t"))
 				{
 					timeFound = true;
@@ -91,6 +103,7 @@ public class Iperfer
 						System.exit(1);
 					}
 				}
+				//any other command line arguments is an error
 				else
 				{
 					System.out.println("Error: missing or additional arguments");
@@ -98,32 +111,21 @@ public class Iperfer
 				}
 			}
 		}
+		//an incorrect number of command line arguments is an error
 		else
 		{
 			System.out.println("Error: missing or additional arguments");
 			System.exit(1);
 		}
 
+		//depending on which flags were set, runs in either client or server mode
 		if(clientMode && hostNameFound && portFound && timeFound)
 		{
 			runClient(hostname, portNumber, time);
-			//below print lines are just used to show that we are gettting the correct
-			//values. remove these before handin
-			/*
-			 System.out.println("We are in client mode.");
-			 System.out.println("Hostname/IP address is: " + hostname);
-			 System.out.println("Port number is: " + portNumber);
-			 System.out.println("Time duration that data should be generated: " + time);
-			 */
 		}
 		else if(serverMode && portFound)
 		{
 			runServer(portNumber);
-			//below print lines are just used to show that we are gettting the correct
-			//values. remove these before handin
-			/*System.out.println("We are in server mode.");
-			 System.out.println("Port number is: " + portNumber);
-			 */
 		}
 		else
 		{
@@ -134,72 +136,79 @@ public class Iperfer
 	}
 
 	/**
+	 * Runs the client code. Connects to a server and continuously sends packets
+	 * to the server for a specified amount of time. 
+	 * Prints out the number of KB sent and the Mbps transfer speed
 	 * 
-	 * 
-	 * @param hostname
+	 * @param hostname 
 	 * @param portNumber
-	 * @param time
+	 * @param time amount of time to send
 	 */
 	private static void runClient(String hostname, int portNumber, int time)
 	{
-		int sent = 0;
-		int speed = 0;
+		double sent = 0;
+		double speed = 0;
 		byte[] packet = new byte[1000];
-		OutputStream outToServer;
 		long endTime;
 
 		Socket client = new Socket();
 		InetSocketAddress host = new InetSocketAddress(hostname, portNumber);
 
 		try {
+			//establishes a connection
 			client.connect(host);
-			outToServer = client.getOutputStream();
-
 			endTime = System.currentTimeMillis() + (time * 1000);
-
-			do{
-				outToServer.write(packet);
+		
+			//sends packets until the time specified is up
+			while (System.currentTimeMillis() < endTime)
+			{
+				client.getOutputStream().write(packet);
 				sent++;
-			} while (System.currentTimeMillis() < endTime);
-
+			}
+			//closes the connection
 			client.close();
 		} catch (IOException e) {
 			System.out.println("Error IO Exception");
 			System.exit(4);
 		}
-		speed = (8*sent/1000)/time;
-		System.out.println("sent=" + sent + " KB rate=" + speed + " Mbps");
+		speed = (8.0*sent/1000.0)/(double)time;
+		//prints the number of bytes sent and the speed it was sent
+		System.out.println("sent=" + (int)(sent + 0.01) + " KB rate=" + speed + " Mbps");
 	}
 
 	/**
-	 *
+	 * Runs the server code. Waits for a connection and counts the number of
+	 * packets that it receives.
+	 * Prints out the number of KB received and the Mbps transfer speed
+	 * 
 	 * @param portNumber
 	 */
 	private static void runServer(int portNumber)
 	{
-		int received = 0;
-		long speed = 0;
-		InputStream toServer;
+		double received = 0;
+		double speed = 0;
 		long startTime = 0;
 		long endTime = 0;
-		long time;
+		double time;
 		byte[] packet = new byte[1000];
+		double num = 0;
 
 		try {
 			ServerSocket server = new ServerSocket();
 			InetSocketAddress host = new InetSocketAddress(portNumber);
 			server.bind(host);
-
+			//waits to connect to a client
 			Socket client = server.accept();
-			toServer = client.getInputStream();
 			startTime = System.currentTimeMillis();
-			while(toServer.read() != -1)
+			//receives all the packets that the client is sending
+			while(num > -1)
 			{
-				
-				received++;
+				num = client.getInputStream().read(packet, 0, 1000);
+				received += num/1000;
 			}
 			endTime = System.currentTimeMillis();
 
+			//ends the client and server connections
 			client.close();
 			server.close();
 		} catch (IOException e) {
@@ -207,8 +216,9 @@ public class Iperfer
 			System.exit(4);
 		}
 
-		time = (endTime - startTime) / 1000;
-		speed = (8*received/1000000)/time;
-		System.out.println("received=" + received + " KB rate=" + speed + " Mbps");
+		time = (double)(endTime - startTime) / 1000.0;
+		speed = (8.0*received/1000.0)/time;
+		//displays the bytes received and the speed it received them
+		System.out.println("received=" + (int)(received + 0.01) + " KB rate=" + speed + " Mbps");
 	}
 }
